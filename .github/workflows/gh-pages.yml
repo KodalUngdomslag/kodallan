@@ -1,0 +1,54 @@
+name: gh-pages
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 8.0.x
+    - name: Version Increment
+      id: version
+      uses: reecetech/version-increment@2024.4.4
+      with:
+        scheme: calver
+        increment: patch
+    - name: DotNet Bump Versions
+      uses: SiqiLu/dotnet-bump-version@2.0.0
+      with:
+          version_files: "**/*.csproj"
+          version_mask: "1.1.1.1"
+          version_overwrite: "${{ steps.version.outputs.major-version }}.${{ steps.version.outputs.minor-version }}.${{ steps.version.outputs.patch-version }}.0" 
+    - name: Publish with dotnet
+      run: dotnet publish ./src --configuration Release --output build
+    - name: Deploy to Github Pages
+      uses: JamesIves/github-pages-deploy-action@releases/v3
+      with:
+        ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+        BASE_BRANCH: main # The branch the action should deploy from.
+        BRANCH: gh-pages-from-actions # The branch the action should deploy to.
+        FOLDER: build/wwwroot # The folder the action should deploy.      
+        SINGLE_COMMIT: true
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: always() && !failure() && !cancelled()
+    steps:
+    - name: Version Increment
+      id: version
+      uses: reecetech/version-increment@2024.4.4
+      with:
+        scheme: calver
+        use_api: true
+    - uses: "marvinpinto/action-automatic-releases@v1.2.1"
+      with:
+        repo_token: "${{ secrets.GITHUB_TOKEN }}"
+        prerelease: false
+        automatic_release_tag: "v${{ steps.version.outputs.major-version }}.${{ steps.version.outputs.minor-version }}.${{ steps.version.outputs.patch-version }}"
